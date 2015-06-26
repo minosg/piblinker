@@ -112,7 +112,7 @@ class PiBlinker():
         return (read_ch,write_ch) 
 
     def i2c_write_as(self, slave_id, format, data):
-        """Format data before i2c transmit using struct pack,"""
+        """Write the data formatted using struct pack,Format needs to be specified"""
 
         try:
             wb_file = self.i2c_devices[slave_id][1]
@@ -125,7 +125,6 @@ class PiBlinker():
             print "Unspecified Error"
 
     def i2c_read_as(self, slave_id, format, byte_no):
-        """Format data afte i2c rx using struct pack,"""
         try:
             rb_file = self.i2c_devices[slave_id][0]
             return struct.unpack(format,rb_file.read(byte_no))
@@ -138,18 +137,24 @@ class PiBlinker():
 
     def i2c_close(self,slave_id):
         """Close the file descriptors associated to the slave channel"""
-
         try:
             self.i2c_devices.pop(slave_id)
         except KeyError:
             print "Device %d does not exit"%slave_id
-        
+
+    def i2c_read_adc(self,slave_id):
+        """Reads data as returned from a 10Bit ADC sampling operation"""
+       
+        return self.i2c_read_as(slave_id, '>H', 2)[0]
+
+
 if __name__ == "__main__":
     #Use case example/test
     pb = PiBlinker()
     pb.led_print("RED", "This is important")
     pb.led_print("GREEN", "This worked")
     pb.led_print("BLUE", "This you should know")
+  
 
     #Test the i2c
     readf,writef = pb.i2c_open_file(0x04,1)
