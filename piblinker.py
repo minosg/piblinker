@@ -23,7 +23,7 @@ class PiBlinker():
 
     def __init__(self):
         """ Module Init."""
-        self.LEDS = {"RED": 21, "GREEN": 26, "BLUE": 20}
+        self.LEDS = {"RED": 17, "GREEN": 18, "BLUE": 27}
         self.last_mode = 0
         self.setup()
         self.i2c_devices = {}
@@ -37,12 +37,12 @@ class PiBlinker():
     def setup(self):
         """ Set the enviroment for the module."""
         commands = [
-            "gpio export 20 out",
-            "gpio export 21 out",
-            "gpio export 26 out",
-            "gpio -g mode 21 out",
-            "gpio -g mode 20 out",
-            "gpio -g mode 26 out"]
+            "gpio export 17 out",
+            "gpio export 18 out",
+            "gpio export 27 out",
+            "gpio -g mode 17 out",
+            "gpio -g mode 18 out",
+            "gpio -g mode 27 out"]
         for c in commands:
             self.run(c)
 
