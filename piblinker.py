@@ -37,12 +37,12 @@ class PiBlinker():
     def setup(self):
         """ Set the enviroment for the module."""
         commands = [
-            "gpio export 17 out",
-            "gpio export 18 out",
-            "gpio export 27 out",
-            "gpio -g mode 17 out",
-            "gpio -g mode 18 out",
-            "gpio -g mode 27 out"]
+            "gpio export %d out"%self.LEDS["RED"],
+            "gpio export %d out"%self.LEDS["GREEN"],
+            "gpio export %d out"%self.LEDS["BLUE"],
+            "gpio -g mode %d out"%self.LEDS["RED"],
+            "gpio -g mode %d out"%self.LEDS["GREEN"],
+            "gpio -g mode %d out"%self.LEDS["BLUE"]]
         for c in commands:
             self.run(c)
 
@@ -149,17 +149,51 @@ class PiBlinker():
 
 
 if __name__ == "__main__":
-    #Use case example/test
+    #initiliaze the module
     pb = PiBlinker()
-    pb.led_print("RED", "This is important")
-    pb.led_print("GREEN", "This worked")
-    pb.led_print("BLUE", "This you should know")
-  
 
-    #Test the i2c
-    readf,writef = pb.i2c_open_file(0x04,1)
-    #read two bytes using the direct file descriptor
-    print repr(readf.read(2))
+    if len(sys.argv) == 3:
+        print sys.argv[2]
+        if sys.argv[1] == "-t":
 
-    #read a 2byte uint8_t variable
-    print pb.i2c_read_as(04,">H",2)
+            if sys.argv[2] == "all":
+                pb.led_print("RED", "This is important")
+                pb.led_print("GREEN", "This worked")
+                pb.led_print("BLUE", "This you should know")
+
+                readf,writef = pb.i2c_open_file(0x04,1)
+                #read two bytes using the direct file descriptor
+                print repr(readf.read(2))
+
+                #read a 2byte uint8_t variable
+                print pb.i2c_read_as(04,">H",2)
+            elif sys.argv[2] == "i2c":
+                readf,writef = pb.i2c_open_file(0x04,1)
+                #read two bytes using the direct file descriptor
+                print repr(readf.read(2))
+
+                #read a 2byte uint8_t variable
+                print pb.i2c_read_as(04,">H",2)
+
+            elif sys.argv[2] == "adc":
+
+                readf,writef = pb.i2c_open_file(0x04,1)
+                while True:
+                    
+                    #Read using read ADC
+                    print "ADC:",pb.i2c_read_adc(0x04)
+                    time.sleep(0.2)
+
+            elif sys.argv[2] == "led":
+                pb.led_print("RED", "This is important")
+                pb.led_print("GREEN", "This worked")
+                pb.led_print("BLUE", "This you should know")
+          
+    elif  len(sys.argv) == 2 and sys.argv[1] == "-h":
+        print "\n ******** Basic testing commands ************"
+        print "piblinker -t all: Test i2c communications and led"
+        print "piblinker -t led: Test led"
+        print "piblinker -t i2c: Test i2c comms"
+        print "piblinker -t adc: Continously poll ADC readouts"
+    else:
+        print "use -h to see test command syntax"
