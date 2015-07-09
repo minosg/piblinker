@@ -142,14 +142,27 @@ class PiBlinker():
         except KeyError:
             print "Device %d does not exit"%slave_id
 
+    def demux(self,data):
+        """ For efficiency purposes 10Bit ADC are muxed GPIO state."""
+
+        adc_val = data & 0x3FF
+        pin_val = (data >> 15)
+        return (adc_val,pin_val)
+
     def i2c_read_adc(self,slave_id):
         """Reads data as returned from a 10Bit ADC sampling operation"""
-       
-        return self.i2c_read_as(slave_id, '>H', 2)[0]
+
+        return self.demux(self.i2c_read_as(slave_id, '>H', 2)[0])[0]
+
+    def i2c_read_pin(self,slave_id):
+        """Reads data as returned from a 10Bit ADC sampling operation"""
+
+        return self.demux(self.i2c_read_as(slave_id, '>H', 2)[0])[1]
 
 
 if __name__ == "__main__":
-    #initiliaze the module
+    mode = 0
+
     pb = PiBlinker()
 
     if len(sys.argv) == 3:
@@ -170,18 +183,20 @@ if __name__ == "__main__":
             elif sys.argv[2] == "i2c":
                 readf,writef = pb.i2c_open_file(0x04,1)
                 #read two bytes using the direct file descriptor
-                print repr(readf.read(2))
+
+                print "2",repr(readf.read(2))
 
                 #read a 2byte uint8_t variable
                 print pb.i2c_read_as(04,">H",2)
 
-            elif sys.argv[2] == "adc":
+            elif sys.argv[2] == "poll":
 
                 readf,writef = pb.i2c_open_file(0x04,1)
                 while True:
                     
                     #Read using read ADC
-                    print "ADC:",pb.i2c_read_adc(0x04)
+                    print "| ADC:",pb.i2c_read_adc(0x04),"| PIN: ",\
+                        pb.i2c_read_pin(0x04),"|"
                     time.sleep(0.2)
 
             elif sys.argv[2] == "led":
@@ -194,6 +209,8 @@ if __name__ == "__main__":
         print "piblinker -t all: Test i2c communications and led"
         print "piblinker -t led: Test led"
         print "piblinker -t i2c: Test i2c comms"
-        print "piblinker -t adc: Continously poll ADC readouts"
+        print "piblinker -t poll: Continously poll ADC Switch readouts"
     else:
         print "use -h to see test command syntax"
+
+    pb.i2c_close(0x04)
