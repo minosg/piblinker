@@ -91,6 +91,51 @@ class PiBlinker():
         print"|%s|> %s" % (led, text)
         self.blink(led, blink_no, 0.5)
 
+    def uart_open(self, port = "/dev/ttyAMA0", baud = 9600):
+        """Open the Serial Channel"""
+
+        try:
+            self.uart = serial.Serial(port, baud)
+        except serial.SerialException:
+            print "** Failed to initialize serial, check your port.** "
+            raise ValueError
+
+    def uart_activate(self):
+        """ Spam UART port untill it receives an ACK """
+
+        self.uart_open()
+        countr = 0
+        #Test with a not supported command
+        t_char = "O"
+        while True:
+            self.uart.write(t_char)
+            if self.uart.inWaiting():
+                repl = self.uart.read(2)
+                if repl == "OK": print "UART Activated"
+                else: print "UART was already enabled"
+                break
+            elif countr == 99:
+                #Test with a supported command to see if activated
+                t_char = "2"
+            elif countr > 100:
+                break
+
+            time.sleep(0.05)
+            countr += 1
+
+    def uart_read(self, target = "ADC"):
+        """Read the register through uart"""
+
+        cmd = { "ADC":"2", "PIN":"1" }
+
+        if target in cmd.keys():
+            self.uart.write(cmd[target])
+            return self.uart.readline()[:-1]
+
+    def uart_close(self):
+        """Close the serial channel"""
+        self.uart.close()
+
     def i2c_open_file(self, slave_id, bus = 1):
         """Open the I2C channel for raw byte comms"""
 
@@ -118,7 +163,7 @@ class PiBlinker():
             wb_file = self.i2c_devices[slave_id][1]
             wb_file.write(struct.pack(format,data))
         except KeyError:
-            print "Device %d does not exit"%slave_id
+            print "Device %d does not exist"%slave_id
         except struct.error:
             print "Pack Error make sure the data fits the format structure"
         except:
@@ -162,11 +207,12 @@ class PiBlinker():
 
 if __name__ == "__main__":
     mode = 0
-
+    import serial
     pb = PiBlinker()
 
     if len(sys.argv) == 3:
-        print sys.argv[2]
+        
+        # Set up test conditions
         if sys.argv[1] == "-t":
 
             if sys.argv[2] == "all":
@@ -180,6 +226,8 @@ if __name__ == "__main__":
 
                 #read a 2byte uint8_t variable
                 print pb.i2c_read_as(04,">H",2)
+                pb.i2c_close(0x04)
+
             elif sys.argv[2] == "i2c":
                 readf,writef = pb.i2c_open_file(0x04,1)
                 #read two bytes using the direct file descriptor
@@ -188,29 +236,42 @@ if __name__ == "__main__":
 
                 #read a 2byte uint8_t variable
                 print pb.i2c_read_as(04,">H",2)
+                pb.i2c_close(0x04)
 
             elif sys.argv[2] == "poll":
 
                 readf,writef = pb.i2c_open_file(0x04,1)
                 while True:
-                    
+
                     #Read using read ADC
                     print "| ADC:",pb.i2c_read_adc(0x04),"| PIN: ",\
                         pb.i2c_read_pin(0x04),"|"
                     time.sleep(0.2)
+                pb.i2c_close(0x04)
+
+            elif sys.argv[2] == "uart":
+                pb.uart_open()
+                print "ADC:", pb.uart_read("ADC")
+                print "PIN:", pb.uart_read("PIN")
+                pb.uart_close()
 
             elif sys.argv[2] == "led":
                 pb.led_print("RED", "This is important")
                 pb.led_print("GREEN", "This worked")
                 pb.led_print("BLUE", "This you should know")
-          
+
     elif  len(sys.argv) == 2 and sys.argv[1] == "-h":
         print "\n ******** Basic testing commands ************"
         print "piblinker -t all: Test i2c communications and led"
         print "piblinker -t led: Test led"
         print "piblinker -t i2c: Test i2c comms"
         print "piblinker -t poll: Continously poll ADC Switch readouts"
+        print "piblinker -t uart: Get serial readouts"
+
+        print "piblinker -a: Activate UART mode after a reset"
+
+    elif  len(sys.argv) == 2 and sys.argv[1] == "-a":
+        pb.uart_activate()
     else:
         print "use -h to see test command syntax"
 
-    pb.i2c_close(0x04)
