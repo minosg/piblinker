@@ -24,4 +24,4 @@
 #Set the fuses
 avrdude -c buspirate -p t85 -P /dev/ttyUSB1 -b 115200 -U lfuse:w:0xe2:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
 #Program the chip
-avrdude -c buspirate -p t85 -P /dev/ttyUSB1 -b 115200 -U flash:w:attiny85_adc_slave.cpp.tiny8.hex:i
+avrdude -c buspirate -p t85 -P /dev/ttyUSB1 -b 115200 -U flash:w:attiny85_dual_mode.cpp.tiny8.hex:i
