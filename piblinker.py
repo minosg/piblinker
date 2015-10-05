@@ -15,6 +15,7 @@ import io
 import os
 import time
 import fcntl
+import serial
 import struct
 import subprocess
 
@@ -91,11 +92,11 @@ class PiBlinker():
         print"|%s|> %s" % (led, text)
         self.blink(led, blink_no, 0.5)
 
-    def uart_open(self, port = "/dev/ttyAMA0", baud = 9600):
+    def uart_open(self, port = "/dev/ttyAMA0", baud = 9600, time_out = None):
         """Open the Serial Channel"""
 
         try:
-            self.uart = serial.Serial(port, baud)
+            self.uart = serial.Serial(port, baud, timeout = time_out)
         except serial.SerialException:
             print "** Failed to initialize serial, check your port.** "
             raise ValueError
@@ -167,7 +168,7 @@ class PiBlinker():
         except struct.error:
             print "Pack Error make sure the data fits the format structure"
         except:
-            print "Unspecified Error"
+            raise IOError
 
     def i2c_read_as(self, slave_id, format, byte_no):
         try:
@@ -178,7 +179,7 @@ class PiBlinker():
         except struct.error:
             print "Pack Error make sure the data fits the format structure"
         except:
-            print "Unspecified Error"
+            raise IOError
 
     def i2c_close(self,slave_id):
         """Close the file descriptors associated to the slave channel"""
@@ -204,6 +205,25 @@ class PiBlinker():
 
         return self.demux(self.i2c_read_as(slave_id, '>H', 2)[0])[1]
 
+    def test_hardware(self):
+        """ Detect hardware shield's presense """
+
+        detected = False
+
+        try:
+            self.uart_open(time_out = 2)
+            reading = self.uart_read("ADC")
+            if len(reading): detected = True
+        except:
+            pass
+        try:
+            readf,writef = self.i2c_open_file(0x04,1)
+            self.i2c_read_as(04,">H",2)
+            self.i2c_close(0x04)
+            detected = True
+        except:
+            pass
+        return detected
 
 if __name__ == "__main__":
     mode = 0
