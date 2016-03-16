@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""blinky.py: A small library that uses wiriping pi access to raspbery pi GPIO 
+"""blinky.py: A small library that uses wiriping pi access to raspbery pi GPIO
    ports,aimed at providing a simple notification interface"""
 
 __author__  = "minos197@gmail.com"
@@ -17,59 +17,75 @@ import time
 import fcntl
 import serial
 import struct
-import subprocess
+from subprocess import Popen, PIPE
 
+
+def colorprint(color):
+    """ Decorator that allows custom methods for clogger """
+
+    def led_print_decorator(func):
+        def led_print_wrapper(*args):
+            class_obj, message =  args
+            return class_obj.led_print(color, func(class_obj, message))
+        return led_print_wrapper
+    return led_print_decorator
+
+class PiBlinkerError(Exception):
+    __module__ = 'exceptions'
 
 class PiBlinker():
 
     def __init__(self):
+        raise ValueError('PiBlinker is not meant to be instantiated')
+
+    @classmethod
+    def setup(self):
         """ Module Init."""
+        # Map a color to GPIO.BCM PIN
         self.LEDS = {"RED": 17, "GREEN": 18, "BLUE": 27}
         self.last_mode = 0
-        self.setup()
+        # Configure the GPIO ports in hardware
+        map(self.run, [ (x % n) for n in self.LEDS.values()
+                        for x in ["gpio export %d out",
+                                  "gpio -g mode %d out"]])
         self.i2c_devices = {}
+        return self
 
-    def run(self, cmd):
+    @staticmethod
+    def run(cmd):
         """ Execute shell command in detached mdoe."""
+        proc = Popen([cmd], stdout=PIPE, stderr=PIPE, shell=True)
+        ret, err = proc.communicate()
+        if err:
+            # ignore warnings in error stream
+            if "Warning" in err:
+                log.warning(err.strip())
+                return err
+            raise PiBlinkerError(err)
+        else:
+            return ret
 
-        proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
-        proc.communicate()
-
-    def setup(self):
-        """ Set the enviroment for the module."""
-        commands = [
-            "gpio export %d out"%self.LEDS["RED"],
-            "gpio export %d out"%self.LEDS["GREEN"],
-            "gpio export %d out"%self.LEDS["BLUE"],
-            "gpio -g mode %d out"%self.LEDS["RED"],
-            "gpio -g mode %d out"%self.LEDS["GREEN"],
-            "gpio -g mode %d out"%self.LEDS["BLUE"]]
-        for c in commands:
-            self.run(c)
-
+    @classmethod
     def set_led(self, led, mode):
         """ Set an LED to one of the supported states."""
 
-        if led not in ["RED", "GREEN", "BLUE"]:
+        if led not in self.LEDS.keys():
             return
-        if mode == "ON":
-            md = 1
-        elif mode == "OFF":
-            md = 0
-        elif mode == "Toggle":
-            md = (self.last_mode + 1) % 2
-        elif mode == 0:
-            md = 0
-        elif mode == 1:
-            md = 1
-        else:
-            print "Invalid Mode"
-            return
-        self.last_mode = md
-        led_gpio = self.LEDS[led]
-        cmd = "gpio -g write %d %d" % (led_gpio, mode)
+        mlist = {"ON": 1, "OFF": 0, "Toggle": -1}
+        # convert input to a numerical mode
+        try:
+            md = mode if mode not in mlist\
+                else {k: v for k, v in mlist.iteritems()}[mode]
+        except KeyError:
+            raise PiBlinkerError("Mode %s is not reognised" % mode)
+
+        # Toggle the led if required
+        self.last_mode = md if md > 0 else (self.last_mode + 1) % 2
+        # Toggle the GPIO
+        cmd = "gpio -g write %d %d" % (self.LEDS[led], self.last_mode)
         self.run(cmd)
 
+    @classmethod
     def blink(self, led, times, delay=1):
         """ Blink an LED n number of times."""
 
@@ -83,6 +99,7 @@ class PiBlinker():
             mode = (mode + 1) % 2
             count += 1
 
+    @classmethod
     def led_print(self, led, text, blink_no=3):
         """ Print a debug message and notify the user with the LED."""
 
@@ -92,6 +109,23 @@ class PiBlinker():
         print"|%s|> %s" % (led, text)
         self.blink(led, blink_no, 0.5)
 
+
+    @classmethod
+    @colorprint("RED")
+    def red(self, message):
+        return message
+
+    @classmethod
+    @colorprint("GREEN")
+    def green(self, message):
+        return message
+
+    @classmethod
+    @colorprint("BLUE")
+    def blue(self, message):
+        return message
+
+    @classmethod
     def uart_open(self, port = "/dev/ttyAMA0", baud = 9600, time_out = None):
         """Open the Serial Channel"""
 
@@ -101,6 +135,7 @@ class PiBlinker():
             print "** Failed to initialize serial, check your port.** "
             raise ValueError
 
+    @classmethod
     def uart_activate(self):
         """ Spam UART port untill it receives an ACK """
 
@@ -124,6 +159,7 @@ class PiBlinker():
             time.sleep(0.05)
             countr += 1
 
+    @classmethod
     def uart_read(self, target = "ADC"):
         """Read the register through uart"""
 
@@ -133,10 +169,12 @@ class PiBlinker():
             self.uart.write(cmd[target])
             return self.uart.readline()[:-1]
 
+    @classmethod
     def uart_close(self):
         """Close the serial channel"""
         self.uart.close()
 
+    @classmethod
     def i2c_open_file(self, slave_id, bus = 1):
         """Open the I2C channel for raw byte comms"""
 
@@ -155,8 +193,9 @@ class PiBlinker():
         #store it to an internal dict
         self.i2c_devices[slave_id] = (read_ch,write_ch)
         #return the file descriptors if the user wants to manually drive them
-        return (read_ch,write_ch) 
+        return (read_ch,write_ch)
 
+    @classmethod
     def i2c_write_as(self, slave_id, format, data):
         """Write the data formatted using struct pack,Format needs to be specified"""
 
@@ -170,6 +209,7 @@ class PiBlinker():
         except:
             raise IOError
 
+    @classmethod
     def i2c_read_as(self, slave_id, format, byte_no):
         try:
             rb_file = self.i2c_devices[slave_id][0]
@@ -181,6 +221,7 @@ class PiBlinker():
         except:
             raise IOError
 
+    @classmethod
     def i2c_close(self,slave_id):
         """Close the file descriptors associated to the slave channel"""
         try:
@@ -188,6 +229,7 @@ class PiBlinker():
         except KeyError:
             print "Device %d does not exit"%slave_id
 
+    @classmethod
     def demux(self,data):
         """ For efficiency purposes 10Bit ADC are muxed GPIO state."""
 
@@ -195,16 +237,19 @@ class PiBlinker():
         pin_val = (data >> 15)
         return (adc_val,pin_val)
 
+    @classmethod
     def i2c_read_adc(self,slave_id):
         """Reads data as returned from a 10Bit ADC sampling operation"""
 
         return self.demux(self.i2c_read_as(slave_id, '>H', 2)[0])[0]
 
+    @classmethod
     def i2c_read_pin(self,slave_id):
         """Reads data as returned from a 10Bit ADC sampling operation"""
 
         return self.demux(self.i2c_read_as(slave_id, '>H', 2)[0])[1]
 
+    @classmethod
     def test_hardware(self):
         """ Detect hardware shield's presense """
 
@@ -228,17 +273,17 @@ class PiBlinker():
 if __name__ == "__main__":
     mode = 0
     import serial
-    pb = PiBlinker()
+    pb = PiBlinker.setup()
 
     if len(sys.argv) == 3:
-        
+
         # Set up test conditions
         if sys.argv[1] == "-t":
 
             if sys.argv[2] == "all":
-                pb.led_print("RED", "This is important")
-                pb.led_print("GREEN", "This worked")
-                pb.led_print("BLUE", "This you should know")
+                pb.red("This is important")
+                pb.green("This worked")
+                pb.blue("This you should know")
 
                 readf,writef = pb.i2c_open_file(0x04,1)
                 #read two bytes using the direct file descriptor
@@ -249,7 +294,7 @@ if __name__ == "__main__":
                 pb.i2c_close(0x04)
 
             elif sys.argv[2] == "i2c":
-                readf,writef = pb.i2c_open_file(0x04,1)
+                readf,writef = pb.i2c_open_file(0x04, 1)
                 #read two bytes using the direct file descriptor
 
                 print "2",repr(readf.read(2))
@@ -276,9 +321,9 @@ if __name__ == "__main__":
                 pb.uart_close()
 
             elif sys.argv[2] == "led":
-                pb.led_print("RED", "This is important")
-                pb.led_print("GREEN", "This worked")
-                pb.led_print("BLUE", "This you should know")
+                pb.red("This is important")
+                pb.green("This worked")
+                pb.blue("This you should know")
 
     elif  len(sys.argv) == 2 and sys.argv[1] == "-h":
         print "\n ******** Basic testing commands ************"
@@ -294,4 +339,3 @@ if __name__ == "__main__":
         pb.uart_activate()
     else:
         print "use -h to see test command syntax"
-
