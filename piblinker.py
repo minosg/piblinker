@@ -18,12 +18,14 @@ import serial
 import struct
 from subprocess import Popen, PIPE
 from colorlogger import CLogger
+from functools import wraps
 
 
 def blinker(color, period=0.2, times=3):
     """ Decorator that allows modular output formating for PiLogger """
 
     def blinker_decorator(func):
+        @wraps(func)
         def func_wrapper(class_obj, message):
             # Blinke the LED before printing sdout
             class_obj.blink(color, times, period)
@@ -50,19 +52,28 @@ class PiBlinker():
 
         """ Module Init."""
         # Map a color to GPIO.BCM PIN
-        self.LEDS = {"RED": 17, "GREEN": 18, "BLUE": 27}
+        self.LEDS = {"RED": [17],
+                     "GREEN": [18],
+                     "BLUE": [27],
+                     "PURPLE": [17, 27],
+                     "YELLOW": [17, 18],
+                     "CYAN": [18, 27],
+                     "WHITE": [17, 18, 27]}
+
         self.last_mode = 0
         # Configure the GPIO ports in hardware
-        map(self.run, [(x % n) for n in self.LEDS.values()
+        map(self.run, [(x % v) for n in self.LEDS.values()
+                       for v in n
                        for x in ["gpio export %d out",
                                  "gpio -g mode %d out"]])
+
         self.i2c_devices = {}
 
         # Assosiate log levels with colors
         if not log_colors:
             log_colors = {"base_color": "CYAN",
                           "info": "HBLUE",
-                          "warning": "RED",
+                          "warning": "YELLOW",
                           "error": "RED",
                           "debug": "GREEN",
                           "ver_debug": "GREEN"}
@@ -100,10 +111,12 @@ class PiBlinker():
             raise PiBlinkerError("Mode %s is not reognised" % mode)
 
         # Toggle the led if required
-        self.last_mode = md if md > 0 else (self.last_mode + 1) % 2
+        led_state = md if md > 0 else (self.last_mode + 1) % 2
+
         # Toggle the GPIO
-        cmd = "gpio -g write %d %d" % (self.LEDS[led], self.last_mode)
-        self.run(cmd)
+        map(self.run, ["gpio -g write %d %d" % (led_no, led_state) for
+                       led_no in self.LEDS[led]])
+        self.last_mode = led_state
 
     @classmethod
     def blink(self, led, times, delay=1):
@@ -113,6 +126,7 @@ class PiBlinker():
         led = led.upper()
         if led not in self.LEDS.keys():
             return
+
         mode = 0
         count = 0
         while (count <= times * 2):
@@ -344,31 +358,39 @@ if __name__ == "__main__":
 
                 readf, writef = pb.i2c_open_file(0x04, 1)
                 # read two bytes using the direct file descriptor
-                print repr(readf.read(2))
+                print "|RAW ADC|>", repr(readf.read(2))
 
                 # read a 2byte uint8_t variable
-                print pb.i2c_read_as(04, ">H", 2)
+                print "|DEC ADC|>", pb.i2c_read_as(04, ">H", 2)[0]
                 pb.i2c_close(0x04)
+
+                pb.info("This is an info")
+                pb.warning("This is a warning")
+                pb.error("This is an error")
+                pb.debug("This is debug")
 
             elif sys.argv[2] == "i2c":
                 readf, writef = pb.i2c_open_file(0x04, 1)
 
                 # read two bytes using the direct file descriptor
-                print "2", repr(readf.read(2))
+                print "|RAW ADC|>", repr(readf.read(2))
 
                 # read a 2byte uint8_t variable
-                print pb.i2c_read_as(04, ">H", 2)
+                print "|DEC ADC|>", pb.i2c_read_as(04, ">H", 2)[0]
                 pb.i2c_close(0x04)
 
             elif sys.argv[2] == "poll":
 
                 readf, writef = pb.i2c_open_file(0x04, 1)
-                while True:
+                try:
+                    while True:
 
-                    # Read using read ADC
-                    print "| ADC:", pb.i2c_read_adc(0x04), "| PIN: ",\
-                        pb.i2c_read_pin(0x04), "|"
-                    time.sleep(0.2)
+                        # Read using read ADC
+                        print "| ADC:", pb.i2c_read_adc(0x04), "| PIN: ",\
+                            pb.i2c_read_pin(0x04), "|"
+                        time.sleep(0.2)
+                except KeyboardInterrupt:
+                    pass
                 pb.i2c_close(0x04)
 
             elif sys.argv[2] == "uart":
@@ -378,9 +400,9 @@ if __name__ == "__main__":
                 pb.uart_close()
 
             elif sys.argv[2] == "led":
-                pb.led_print("RED", "This is important")
-                pb.led_print("GREEN", "This is important2")
-                pb.led_print("BLUE", "This is important3")
+                pb.led_print("RED", "This is RED")
+                pb.led_print("GREEN", "This is GREEN")
+                pb.led_print("BLUE", "This is BLUE")
 
             elif sys.argv[2] == "log":
                 pb.info("This is an info")

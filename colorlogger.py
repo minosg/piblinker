@@ -96,7 +96,7 @@ class CLogger(object):
     @classmethod
     def setup(self,
               label="",
-              level="info",
+              level="error",
               path="",
               alt_levels=None,
               pattern=None):
@@ -179,7 +179,8 @@ class CLogger(object):
 
         if self.LEVEL == self.DLEVELS["ver_debug"][0]:
 
-            mod, line, fn, _, _ = getframeinfo(stack()[-2][0])
+            #print "\n".join(stack())
+            mod, line, fn, _, _ = getframeinfo(stack()[-3][0])
             details = " >> Called by %s() at %d in %s" % (fn, line, mod)
             colored_line[-1] = colored_line[-1] + details
 
@@ -207,7 +208,7 @@ class CLogger(object):
 
 
 if __name__ == '__main__':
-    log = CLogger.setup("colortest", "DEBUG")
+    log = CLogger.setup("colortest", "ver_debug")
 
     log.info("This is an info")
     log.warning("This is a warning")
