@@ -19,6 +19,7 @@ import struct
 from subprocess import Popen, PIPE
 from colorlogger import CLogger
 from functools import wraps
+from pidaemon import PiDaemon, start_daemon, kill_daemon
 
 
 def blinker(color, period=0.2, times=3):
@@ -423,5 +424,9 @@ if __name__ == "__main__":
 
     elif len(sys.argv) == 2 and sys.argv[1] == "-a":
         pb.uart_activate()
+    elif len(sys.argv) == 2 and sys.argv[1] == "-d":
+        start_daemon()
+    elif len(sys.argv) == 2 and sys.argv[1] == "-k":
+        kill_daemon()
     else:
         print "use -h to see test command syntax"
