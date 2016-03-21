@@ -13,19 +13,37 @@ __date__ = "20-06-2015"
 import os
 import time
 import daemon
+from signal import SIGTERM
 from daemon.pidfile import PIDLockFile
 from collections import namedtuple
 from subprocess import Popen, PIPE
 import RPi.GPIO as GPIO
 
-def start_daemon(f1=None, f2=None, pid_file="/tmp/piblinker_daemon.pid"):
+def normal_start(f1=None,
+                 f2=None,
+                 user=None,
+                 sudopass=None,
+                 pid_file="/tmp/piblinker_daemon.pid"):
     """ Wrapper utility function to call Daemon Class"""
 
     pid_file_path = pid_file
     if os.path.isfile(pid_file_path):
-        print "Daemon Already Running, Restarting"
+        print "PiDaemon Already Running, Restarting"
+    PiDaemon(f1, f2, user, sudopass)
+
+def start_daemon(f1=None,
+                 f2=None,
+                 user=None,
+                 sudopass=None,
+                 pid_file="/tmp/piblinker_daemon.pid"):
+    """ Wrapper utility function to call Daemon Class"""
+
+    pid_file_path = pid_file
+    if os.path.isfile(pid_file_path):
+        print "PiDaemon Already Running, Restarting"
+
     with daemon.DaemonContext(pidfile=PIDLockFile(pid_file_path)):
-        PiDaemon()
+        PiDaemon(f1, f2, user, sudopass)
 
 
 def kill_daemon(pid_file="/tmp/piblinker_daemon.pid"):
@@ -36,8 +54,8 @@ def kill_daemon(pid_file="/tmp/piblinker_daemon.pid"):
         with open(pid_file_path) as F:
             pid = F.read().strip()
         print "Killing PiBlinker Daemon Running with pid %s" % pid
-        self.run("kill -9 %s" % pid)
-    except:
+        os.kill(int(pid), SIGTERM)
+    except Exception as e:
         pass
 
 
@@ -91,6 +109,7 @@ class PiDaemon(object):
             self.actions = namedtuple('Actions',
                                       'button1 button2')(self.reboot,
                                                          self.shutdown)
+
         self._run()
 
     def _setup_button(self, button_no):

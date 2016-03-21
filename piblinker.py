@@ -10,7 +10,6 @@ __email__ = "Minos Galanakis"
 __project__ = "smartpi"
 __date__ = "01-06-2015"
 
-import sys
 import io
 import time
 import fcntl
@@ -19,7 +18,7 @@ import struct
 from subprocess import Popen, PIPE
 from colorlogger import CLogger
 from functools import wraps
-from pidaemon import PiDaemon, start_daemon, kill_daemon
+from pidaemon import start_daemon, kill_daemon, normal_start
 
 
 def blinker(color, period=0.2, times=3):
@@ -112,7 +111,7 @@ class PiBlinker():
             raise PiBlinkerError("Mode %s is not reognised" % mode)
 
         # Toggle the led if required
-        led_state = md if md > 0 else (self.last_mode + 1) % 2
+        led_state = md if md >= 0 else (self.last_mode + 1) % 2
 
         # Toggle the GPIO
         map(self.run, ["gpio -g write %d %d" % (led_no, led_state) for
@@ -129,18 +128,41 @@ class PiBlinker():
             return
 
         mode = 0
-        count = 0
+        count = 1
         while (count <= times * 2):
             self.set_led(led, mode)
             time.sleep(delay)
             mode = (mode + 1) % 2
             count += 1
+        self.set_led(led, mode)
 
     @classmethod
     def led_print(self, color, text):
         """ Print a debug message and notify the user with the LED."""
 
         eval("self.%s" % color.lower())(text)
+
+    @classmethod
+    def led_bcast(self, data):
+        """ Broadcast a number through led brings """
+        import re
+
+        # separate the numbers in the string ie 192.168.3.1 will become array
+        data = map(int, filter(lambda x: x, re.split(r'\D', data)))
+
+        # Separate the digits to a three color tuple
+        data = map(lambda x: (x/100, (x % 100)/10, (x % 10)), data)
+
+        for red_cnt, green_cnt, blue_cnt in data:
+            self.blink("GREEN", 1, 1)
+            time.sleep(0.5)
+            self.blink("RED", red_cnt, 0.2)
+            time.sleep(0.5)
+            self.blink("GREEN", green_cnt, 0.2)
+            time.sleep(0.5)
+            self.blink("BLUE", blue_cnt, 0.2)
+            time.sleep(0.5)
+            self.blink("RED", 1, 1)
 
     @classmethod
     @blinker("RED")
@@ -344,89 +366,105 @@ class PiBlinker():
         return detected
 
 if __name__ == "__main__":
+
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--test", help="Test Hardware, select from [all,\
+                    i2c, led, log, poll, uart]", dest='test')
+    parser.add_argument("-a", "--activate", help="Activate UART mode\
+                        after a reset", action="store_true")
+    parser.add_argument("-d", "--daemon", help="Start a button monitor daemon",
+                        action="store_true")
+    parser.add_argument("-nd", "--nodaemon", help="Start monitor without\
+                        daemon context used in conjuction with wrappers",
+                        action="store_true")
+    parser.add_argument("-b1", "--button1", help="Bind script to button1",
+                        dest='button1')
+    parser.add_argument("-b2", "--button2", help="Bind script to button2",
+                        dest='button2')
+    parser.add_argument("-u", "--user", help="Select different user\
+                        to run script as")
+    parser.add_argument("-s", "--sudopass", help="Set optional sudo password\
+                        for elevated priviledges")
+    parser.add_argument("-k", "--kill", help="increase output verbosity",
+                        action="store_true")
+    parser.add_argument("-i", "--blinkip", help="increase output verbosity",
+                        action="store_true")
+
+    args = parser.parse_args()
     mode = 0
     pb = PiBlinker.setup()
-
-    if len(sys.argv) == 3:
-
-        # Set up test conditions
-        if sys.argv[1] == "-t":
-
-            if sys.argv[2] == "all":
-                pb.red("This is important")
-                pb.green("This worked")
-                pb.blue("This you should know")
-
-                readf, writef = pb.i2c_open_file(0x04, 1)
-                # read two bytes using the direct file descriptor
-                print "|RAW ADC|>", repr(readf.read(2))
-
-                # read a 2byte uint8_t variable
-                print "|DEC ADC|>", pb.i2c_read_as(04, ">H", 2)[0]
-                pb.i2c_close(0x04)
-
-                pb.info("This is an info")
-                pb.warning("This is a warning")
-                pb.error("This is an error")
-                pb.debug("This is debug")
-
-            elif sys.argv[2] == "i2c":
-                readf, writef = pb.i2c_open_file(0x04, 1)
-
-                # read two bytes using the direct file descriptor
-                print "|RAW ADC|>", repr(readf.read(2))
-
-                # read a 2byte uint8_t variable
-                print "|DEC ADC|>", pb.i2c_read_as(04, ">H", 2)[0]
-                pb.i2c_close(0x04)
-
-            elif sys.argv[2] == "poll":
-
-                readf, writef = pb.i2c_open_file(0x04, 1)
-                try:
-                    while True:
-
-                        # Read using read ADC
-                        print "| ADC:", pb.i2c_read_adc(0x04), "| PIN: ",\
-                            pb.i2c_read_pin(0x04), "|"
-                        time.sleep(0.2)
-                except KeyboardInterrupt:
-                    pass
-                pb.i2c_close(0x04)
-
-            elif sys.argv[2] == "uart":
-                pb.uart_open()
-                print "ADC:", pb.uart_read("ADC")
-                print "PIN:", pb.uart_read("PIN")
-                pb.uart_close()
-
-            elif sys.argv[2] == "led":
-                pb.led_print("RED", "This is RED")
-                pb.led_print("GREEN", "This is GREEN")
-                pb.led_print("BLUE", "This is BLUE")
-
-            elif sys.argv[2] == "log":
-                pb.info("This is an info")
-                pb.warning("This is a warning")
-                pb.error("This is an error")
-                pb.debug("This is debug")
-
-    elif len(sys.argv) == 2 and sys.argv[1] == "-h":
-        print "\n ******** Basic testing commands ************"
-        print "piblinker -t all: Test i2c communications and led"
-        print "piblinker -t led: Test led"
-        print "piblinker -t log: Test led and loging output"
-        print "piblinker -t i2c: Test i2c comms"
-        print "piblinker -t poll: Continously poll ADC Switch readouts"
-        print "piblinker -t uart: Get serial readouts"
-
-        print "piblinker -a: Activate UART mode after a reset"
-
-    elif len(sys.argv) == 2 and sys.argv[1] == "-a":
-        pb.uart_activate()
-    elif len(sys.argv) == 2 and sys.argv[1] == "-d":
-        start_daemon()
-    elif len(sys.argv) == 2 and sys.argv[1] == "-k":
+    if args.daemon or args.nodaemon:
+        arguments = [args.button1, args.button2, args.user, args.sudopass]
+        if args.nodaemon:
+            normal_start(*arguments)
+        else:
+            start_daemon(*arguments)
+    elif args.kill:
         kill_daemon()
+    elif args.activate:
+        pb.uart_activate()
+    elif args.blinkip:
+        pb.led_bcast(pb.run("hostname -I"))
+    elif args.test:
+        if args.test == "all":
+            pb.red("This is important")
+            pb.green("This worked")
+            pb.blue("This you should know")
+
+            readf, writef = pb.i2c_open_file(0x04, 1)
+            # read two bytes using the direct file descriptor
+            print "|RAW ADC|>", repr(readf.read(2))
+
+            # read a 2byte uint8_t variable
+            print "|DEC ADC|>", pb.i2c_read_as(04, ">H", 2)[0]
+            pb.i2c_close(0x04)
+
+            pb.info("This is an info")
+            pb.warning("This is a warning")
+            pb.error("This is an error")
+            pb.debug("This is debug")
+
+        elif args.test == "i2c":
+            readf, writef = pb.i2c_open_file(0x04, 1)
+
+            # read two bytes using the direct file descriptor
+            print "|RAW ADC|>", repr(readf.read(2))
+
+            # read a 2byte uint8_t variable
+            print "|DEC ADC|>", pb.i2c_read_as(04, ">H", 2)[0]
+            pb.i2c_close(0x04)
+
+        elif args.test == "poll":
+
+            readf, writef = pb.i2c_open_file(0x04, 1)
+            try:
+                while True:
+
+                    # Read using read ADC
+                    print "| ADC:", pb.i2c_read_adc(0x04), "| PIN: ",\
+                        pb.i2c_read_pin(0x04), "|"
+                    time.sleep(0.2)
+            except KeyboardInterrupt:
+                pass
+            pb.i2c_close(0x04)
+
+        elif args.test == "uart":
+            pb.uart_open()
+            print "ADC:", pb.uart_read("ADC")
+            print "PIN:", pb.uart_read("PIN")
+            pb.uart_close()
+
+        elif args.test == "led":
+            pb.led_print("RED", "This is RED")
+            pb.led_print("GREEN", "This is GREEN")
+            pb.led_print("BLUE", "This is BLUE")
+
+        elif args.test == "log":
+            pb.info("This is an info")
+            pb.warning("This is a warning")
+            pb.error("This is an error")
+            pb.debug("This is debug")
+
     else:
-        print "use -h to see test command syntax"
+        parser.print_help()
