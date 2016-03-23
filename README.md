@@ -26,6 +26,26 @@ manufacture using collaborative panel manufacturers
  * Supports different levels of logging with the verbose debugging notifying
  user of the current function and line number in code.
  * Contains simple command line interface for Testing
+ * Can be run at background as a well behaved Linux Daemon without super user
+ permissions.
+ * Daemonized process binds python functions/methods or user defined scripts
+ to button events. By default not user set buttons are mapped to Reboot,
+ Shutdown.
+ * Button binding process can be run at current context, used for debugging or
+ with process management scripts such as Supervisord.
+ * The library can broadcast strings containing numbers using the LED. This is
+ particularly useful in embedded deployment where there is no screen attached
+ to the system*.By default it broadcasts the IP aquired  by ```hostname  -I```
+
+_**Each number is represented as a series of blinks,
+with the following mapping:*_
+
+ * _*Start digit: Single 1 second Green Pulse*_
+ * _*Powers of 100: N 300 mSecond Red Pulses*_
+ * _*Powers of 100: N 300 mSecond Green Pulses*_
+ * _*Powers of 100: N 300 mSecond Blue Pulses*_
+ * _*End of digit: Single 1 Second Red Pulse*_
+
 
 ### Screenshots
 
@@ -48,9 +68,12 @@ Assuming a Raspbian System with python 2.7
   cd ~/
   git clone https://github.com/minosg/piblinker.git
   ln -s ~/piblinker /usr/lib/python2.7/dist-packages/piblinker
+  # To make the library callable
+  ln -s ~/piblinker/piblinker.py /usr/bin/piblinker
 ```
-Make sure you point the symbolic link to the right location.
-`locate -b '\dist-packages'` Will help you locate where Python modules are stored
+Ensure you point the symbolic link to the right location.
+`locate -b '\dist-packages'` Will help you locate where Python modules
+are stored
 
 ### Usage
 
@@ -160,8 +183,8 @@ interval waiting for a special byte and fall-back to use i2c interface (default)
 if nothing is received. If the byte is received, then it will set UART mode as
 default.
 
-This behavior can be tested using ```piblinker -a``` , but when using the library to
-custom projects that will power cycle ensure that
+This behavior can be tested using ```piblinker -a``` , but when using the
+library in custom projects, which may power cycle ensure that
 
 ~~~~~~
 PiBlinker.uart_activate()
@@ -179,3 +202,43 @@ piblinker -t poll: Continously poll ADC Switch readouts
 piblinker -t uart: Get serial readouts
 piblinker -a: Activate UART mode after a reset
 ~~~~~
+
+### Extra Features
+
+To make the module broadcast the IP address using the LED use
+~~~~~
+piblinker -t
+~~~~~
+
+To run the button monitor daemon a set of optional arguments are supported
+~~~~~
+piblinker -d
+piblinker -d -b1 /home/yourscript.sh -b2 /usr/bin/ls
+piblinker -d -b1 /home/yourscript.sh -u someuser
+piblinker -d -b1 /home/yourscript.sh -u someuser -s letmein
+~~~~~
+
+Argument ```-d --daemon``` runs the button watchdog as a daemon.
+If that is not the desired behavior it can replaced by ```-nd --nodaemon```
+
+Arguments ```-bX``` indicate the button that you wish to bind the script.The
+library at current state only supports two buttons but can be easily modified
+to extend that functionality. If a script is not set the default behavior is
+to bind one button to shutdown and one to reboot. When called from python code,
+those arguments are method pointers so perform any task.
+
+By default the library **assumes** that the user has elevated permission to
+execute task set in the /etc/sudoers with the NOPASSWORD directive i.e
+
+~~~~~~
+limited_user     ALL=NOPASSWD: /sbin/reboot
+or (non recommended)
+ALL     ALL=NOPASSWD: /sbin/reboot
+~~~~~~
+
+By default triggered command will be executed using sudo. If that is not the
+case the ```-s``` directive is needed to let the library fill the sudo password.
+
+In some occasions the script needs to be run as a different user. Using ```-u```
+in combination with a valid sudo password for the user running the daemon, **not
+the target user who will execute the command**, is recommended.
